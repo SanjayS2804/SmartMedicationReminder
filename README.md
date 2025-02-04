@@ -1,1 +1,3 @@
 # SmartMedicationReminder
+
+  The Smart Medication Reminder system is an innovative solution designed to help patients adhere to their prescribed medication schedules more effectively, particularly those with chronic illnesses or memory impairments. This system leverages a Real-Time Clock (RTC)  module to provide precise timing for medication reminders, ensuring that alerts are triggered at the exact scheduled times. An LCD display is integrated to visually convey detailed information about the medication, such as the name, dosage, and timing, making it easier for users to follow their treatment plans
