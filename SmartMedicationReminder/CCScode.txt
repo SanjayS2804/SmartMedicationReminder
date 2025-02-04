@@ -1,0 +1,143 @@
+#include <16F877A.h>
+#device ADC=10
+#FUSES NOWDT
+#FUSES PUT
+#FUSES NOBROWNOUT
+#FUSES NOLVP
+#use delay(crystal=4MHZ)
+#use i2c(Master,Fast,sda=PIN_C4,scl=PIN_C3)
+
+#define LCD_ENABLE_PIN PIN_D0
+#define LCD_RS_PIN PIN_D1
+#define LCD_RW_PIN PIN_D2
+#define LCD_DATA4 PIN_D4
+#define LCD_DATA5 PIN_D5
+#define LCD_DATA6 PIN_D6
+#define LCD_DATA7 PIN_D7
+
+#include <lcd.c>
+
+unsigned int8 seconds = 0x57;
+unsigned int8 minutes = 0x59;
+unsigned int8 hours = 0x11;
+
+#define LED1 PIN_B0
+#define LED2 PIN_B1
+#define BUZZER1 PIN_D3
+#define BUZZER2 PIN_C2
+#define BUTTON1 PIN_B2
+#define BUTTON2 PIN_B3
+
+#define STATE_FIRST_REMINDER 0
+#define STATE_SECOND_REMINDER 1
+
+int reminder_state = STATE_FIRST_REMINDER; // Track which reminder is active
+int reminder1_active = 0; // Flag for Medicine 1 reminder active status
+int reminder2_active = 0; // Flag for Medicine 2 reminder active status
+
+byte read(byte add) {
+    unsigned int8 data;
+    i2c_start();
+    i2c_write(0xD0);
+    i2c_write(add);
+    i2c_stop();
+    i2c_start();
+    i2c_write(0xD1);
+    data = i2c_read(0);
+    i2c_stop();
+    return data;
+}
+
+void write() {
+    i2c_start();
+    i2c_write(0xD0);
+    i2c_write(0x00);
+    i2c_write(seconds);
+    i2c_write(minutes);
+    i2c_write(hours);
+    i2c_stop();
+}
+
+void display_medication_message(int hr, int min,int sec , int am_pm) {
+    // First reminder at 12:07 PM
+    if (hr == 12 && min == 0 && sec==0 && am_pm == 1 && !reminder1_active) {
+        lcd_gotoxy(1, 1);
+        printf(lcd_putc, "Take Medicine 1 ");
+        output_high(LED1);
+        output_high(BUZZER1);
+        reminder1_active = 1; // Set flag to keep LED1 and BUZZER1 on
+    }
+    // Second reminder at 6:00 PM
+    else if (hr == 7 && min == 0  && sec == 0 && am_pm == 1 && !reminder2_active) {
+        lcd_gotoxy(1, 1);
+        printf(lcd_putc, "Take Medicine 2 ");
+        output_high(LED2);
+        output_high(BUZZER2);
+        reminder2_active = 1; // Set flag to keep LED2 and BUZZER2 on
+    }
+    else if (!reminder1_active && !reminder2_active) {
+        // Clear display if no reminders are active
+        lcd_gotoxy(1, 1);
+        printf(lcd_putc, "                  ");
+    }
+}
+
+void main() {
+    set_tris_b(0xF3); // Adjusted for both BUTTON1 (B2) and BUTTON2 (B3)
+    lcd_init();
+    write();
+
+    while(TRUE) {
+        seconds = read(0);
+        minutes = read(1);
+        hours = read(2);
+
+        seconds = ((seconds >> 4) * 10) + (seconds & 0x0F);
+        minutes = ((minutes >> 4) * 10) + (minutes & 0x0F);
+        hours = ((hours >> 4) * 10) + (hours & 0x0F);
+
+        int hr = hours;
+        int am_pm = 1;
+
+        if (hr >= 12) {
+            am_pm = 1;
+            if (hr > 12) {
+                hr -= 12;
+            }
+        } else {
+            am_pm = 0;
+            if (hr == 0) {
+                hr = 12;
+            }
+        }
+
+        lcd_gotoxy(9, 0);
+        printf(lcd_putc, "%02u:%02u:%02u", hr, minutes, seconds);
+
+        lcd_gotoxy(14, 0);
+        if (am_pm) { 
+            printf(lcd_putc, " PM");
+        } else { 
+            printf(lcd_putc, " AM");
+        }
+
+        // Check BUTTON1 (B2) to turn off LED1 (B0) and BUZZER1 (D3)
+        if (input(BUTTON1) == 0 && reminder1_active) {
+            output_low(LED1);
+            output_low(BUZZER1);
+            reminder1_active = 0; // Reset flag for Medicine 1
+        }
+
+        // Check BUTTON2 (B3) to turn off LED2 (B1) and BUZZER2 (C2)
+        if (input(BUTTON2) == 0 && reminder2_active) {
+            output_low(LED2);
+            output_low(BUZZER2);
+            reminder2_active = 0; // Reset flag for Medicine 2
+        }
+
+        // Call the display function regardless of the button state
+        display_medication_message(hr, minutes, seconds , am_pm);
+
+        delay_ms(500);
+    }
+}
